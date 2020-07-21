@@ -1,6 +1,6 @@
 # Ultimate Vocal Remover GUI
 
-![alt text](https://github.com/Anjok07/ultimatevocalremovergui/blob/master/Images/UVR-App.jpg)
+![alt text](https://github.com/Anjok07/ultimatevocalremovergui/blob/develop/Images/UVR-app.jpg)
 
 This is a deep-learning-based tool that extracts the instrumental from a track containing vocals. This project is a GUI version of the vocal remover created and posted by tsurumeso. This would not have been possible without tsurumeso's work and dedication! You can find tsurumeso's original command line version [here](https://github.com/tsurumeso/vocal-remover)
 
