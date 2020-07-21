@@ -1,4 +1,4 @@
-# Ultimate Vocal Remover GUI
+# Ultimate Vocal Remover GUI (Develop Version)
 
 ![alt text](https://github.com/Anjok07/ultimatevocalremovergui/blob/develop/Images/UVR-app.jpg)
 
@@ -47,10 +47,8 @@ Download the latest version from [here](https://github.com/Anjok07/ultimatevocal
  - You can select as many files as you like. Multiple conversions are supported!
  - Conversions on wav files should always work with no issue. However, you will need to install and configure ffmpeg in order for conversions on mp3, mp4, m4a, and FLAC formats. If you select non-wav music files without having ffmpeg configured and attempt a conversion it will freeze and you will have to restart the application.
  - Only check the GPU box if you have the Cuda driver installed for your Nvidia GPU. Most Nvidia GPU's released prior to 2015 or with less than 4GB's of V-RAM might not be compatible.
-- The dropdown model menu consists of the Multi-Genre Model I just finished (trained on 700 pairs), a stacked model (a model trained on converted data), & the stock model the AI originally came with (for comparison). I included the option to add your own model as well if you've trained your own. Alternatively, you can also simply add a model to the models directory and restart the application, as it will automatically show there.
-- The SR, HOP LENGTH, and WINDOW SIZE parameters are set to the defaults. Those were the parameters used in training, so changing them may result in poor conversion performance unless the model is compatible with the changes made. Those are essentially advanced settings, so I recommend you leave them as is unless you know exactly what you're doing.
-- The Post-Process option is a developement option. Keep it unchecked for most conversions, unless you know what you're doing.
-- The "Save Mask PNG" option allows you to to save a copy of the spectrogram as a PNG.
+- The dropdown model menu consists of a provisional model that I trained with roughly 200 tracks. I included the option to add your own model as well if you've trained your own. Alternatively, you can also simply add a model to the models directory and restart the application, as it will automatically show there.
+- The SR, N FFT, HOP LENGTH, and WINDOW SIZE parameters are set to the defaults. Those were the parameters used in training, so changing them may result in poor conversion performance unless the model is compatible with the changes made. Those are essentially advanced settings, so I recommend you leave them as is unless you know exactly what you're doing.
 - The Stacked Model is meant to clean up vocal residue left over in the form of vocal pinches and static. This model is only meant for instrumentals created via converted tracks that ran through one of the main models!
 - The "Stack Passes" option should only be used with the Stacked Model. This option allows you to set the amount of times you want a track to run through a model. The amount of times you need to run it through will vary greatly by track. Most tracks won't require any more than 2-5 passes. If you do 5 or more passes on a track you risk quality degration. When doing stack passes the first and last "vocal" track will give you an idea of how much static was removed.
 - Conversion times will greatly depend on your hardware. This application will NOT be friendly to older or budget hardware. Please proceed with caution! Pay attention to your PC and make sure it doesn't overheat.
