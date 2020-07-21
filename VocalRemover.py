@@ -30,10 +30,9 @@ logo_path = os.path.join(base_path, 'Images/UVR-logo.png')
 DEFAULT_DATA = {
     'exportPath': '',
     'gpuConversion': False,
-    'postprocessing': False,
-    'mask': False,
     'stackLoops': False,
     'srValue': 44100,
+    'nfftValue': 2048,
     'hopValue': 1024,
     'stackLoopsNum': 1,
     'winSize': 512,
@@ -155,7 +154,7 @@ class MainWindow(tk.Tk):
             xpad=int(self.winfo_screenwidth()/2 - 530/2),
             ypad=int(self.winfo_screenheight()/2 - 690/2)))
         self.configure(bg='#FFFFFF')  # Set background color to white
-        self.resizable(False, False)
+        self.resizable(True, True)
         self.update()
 
         # --Variables--
@@ -168,10 +167,9 @@ class MainWindow(tk.Tk):
         self.exportPath_var = tk.StringVar(value=data['exportPath'])
         self.filePaths = ''
         self.gpuConversion_var = tk.BooleanVar(value=data['gpuConversion'])
-        self.postprocessing_var = tk.BooleanVar(value=data['postprocessing'])
-        self.mask_var = tk.BooleanVar(value=data['mask'])
         self.stackLoops_var = tk.IntVar(value=data['stackLoops'])
         self.srValue_var = tk.IntVar(value=data['srValue'])
+        self.nfftValue_var = tk.IntVar(value=data['nfftValue'])
         self.hopValue_var = tk.IntVar(value=data['hopValue'])
         self.winSize_var = tk.IntVar(value=data['winSize'])
         self.stackLoopsNum_var = tk.IntVar(value=data['stackLoopsNum'])
@@ -268,21 +266,25 @@ class MainWindow(tk.Tk):
                                                        text='GPU Conversion',
                                                        variable=self.gpuConversion_var,
                                                        )
-        # Postprocessing
-        self.options_post_Checkbutton = ttk.Checkbutton(master=self.options_Frame,
-                                                        text='Post-Process (Dev Opt)',
-                                                        variable=self.postprocessing_var,
-                                                        )
-        # Mask
-        self.options_mask_Checkbutton = ttk.Checkbutton(master=self.options_Frame,
-                                                        text='Save Mask PNG',
-                                                        variable=self.mask_var,
-                                                        )
+        # Stack Loops
+        self.options_stack_Checkbutton = ttk.Checkbutton(master=self.options_Frame,
+                                                         text='Stack Passes',
+                                                         variable=self.stackLoops_var,
+                                                         )
+        self.options_stack_Entry = ttk.Entry(master=self.options_Frame,
+                                             textvariable=self.stackLoopsNum_var,)
+        self.options_stack_Checkbutton.configure(command=self.update_stack_state)  # nopep8
         # SR
         self.options_sr_Entry = ttk.Entry(master=self.options_Frame,
                                           textvariable=self.srValue_var,)
         self.options_sr_Label = tk.Label(master=self.options_Frame,
                                          text='SR', anchor=tk.W,
+                                         background='white')
+        # N_FFT
+        self.options_nfft_Entry = ttk.Entry(master=self.options_Frame,
+                                          textvariable=self.nfftValue_var,)
+        self.options_nfft_Label = tk.Label(master=self.options_Frame,
+                                         text='N FFT', anchor=tk.W,
                                          background='white')
         # HOP LENGTH
         self.options_hop_Entry = ttk.Entry(master=self.options_Frame,
@@ -296,14 +298,6 @@ class MainWindow(tk.Tk):
         self.options_winSize_Label = tk.Label(master=self.options_Frame,
                                               text='WINDOW SIZE', anchor=tk.W,
                                               background='white')
-        # Stack Loops
-        self.options_stack_Checkbutton = ttk.Checkbutton(master=self.options_Frame,
-                                                         text='Stack Passes',
-                                                         variable=self.stackLoops_var,
-                                                         )
-        self.options_stack_Entry = ttk.Entry(master=self.options_Frame,
-                                             textvariable=self.stackLoopsNum_var,)
-        self.options_stack_Checkbutton.configure(command=self.update_stack_state)  # nopep8
         # Choose Model
         self.options_model_Label = tk.Label(master=self.options_Frame,
                                             text='Choose Your Model',
@@ -319,30 +313,31 @@ class MainWindow(tk.Tk):
         # GPU Selection
         self.options_gpu_Checkbutton.place(x=0, y=0, width=0, height=0,
                                            relx=0, rely=0, relwidth=1/3, relheight=1/4)
-        self.options_post_Checkbutton.place(x=0, y=0, width=0, height=0,
-                                            relx=0, rely=1/4, relwidth=1/3, relheight=1/4)
-        self.options_mask_Checkbutton.place(x=0, y=0, width=0, height=0,
-                                            relx=0, rely=2/4, relwidth=1/3, relheight=1/4)
         # Stack Loops
         self.options_stack_Checkbutton.place(x=0, y=0, width=0, height=0,
-                                             relx=0, rely=3/4, relwidth=1/3/4*3, relheight=1/4)
+                                             relx=0, rely=1/4, relwidth=1/3/4*3, relheight=1/4)
         self.options_stack_Entry.place(x=0, y=4, width=0, height=-8,
-                                       relx=1/3/4*2.4, rely=3/4, relwidth=1/3/4*0.9, relheight=1/4)
+                                       relx=1/3/4*2.4, rely=1/4, relwidth=1/3/4*0.9, relheight=1/4)
         # SR
         self.options_sr_Entry.place(x=-5, y=4, width=5, height=-8,
                                     relx=1/3, rely=0, relwidth=1/3/4, relheight=1/4)
         self.options_sr_Label.place(x=10, y=4, width=-10, height=-8,
                                     relx=1/3/4 + 1/3, rely=0, relwidth=1/3/4*3, relheight=1/4)
+        # N FFT
+        self.options_nfft_Entry.place(x=-5, y=4, width=5, height=-8,
+                                    relx=1/3, rely=1/4, relwidth=1/3/4, relheight=1/4)
+        self.options_nfft_Label.place(x=10, y=4, width=-10, height=-8,
+                                    relx=1/3/4 + 1/3, rely=1/4, relwidth=1/3/4*3, relheight=1/4)
         # HOP LENGTH
         self.options_hop_Entry.place(x=-5, y=4, width=5, height=-8,
-                                     relx=1/3, rely=1/4, relwidth=1/3/4, relheight=1/4)
+                                     relx=1/3, rely=2/4, relwidth=1/3/4, relheight=1/4)
         self.options_hop_Label.place(x=10, y=4, width=-10, height=-8,
-                                     relx=1/3/4 + 1/3, rely=1/4, relwidth=1/3/4*3, relheight=1/4)
+                                     relx=1/3/4 + 1/3, rely=2/4, relwidth=1/3/4*3, relheight=1/4)
         # WINDOW SIZE
         self.options_winSize_Entry.place(x=-5, y=4, width=5, height=-8,
-                                         relx=1/3, rely=2/4, relwidth=1/3/4, relheight=1/4)
+                                         relx=1/3, rely=3/4, relwidth=1/3/4, relheight=1/4)
         self.options_winSize_Label.place(x=10, y=4, width=-10, height=-8,
-                                         relx=1/3/4 + 1/3, rely=2/4, relwidth=1/3/4*3, relheight=1/4)
+                                         relx=1/3/4 + 1/3, rely=3/4, relwidth=1/3/4*3, relheight=1/4)
         # Choose Model
         self.options_model_Label.place(x=0, y=0, width=0, height=-10,
                                        relx=2/3, rely=0, relwidth=1/3, relheight=1/3)
@@ -418,6 +413,7 @@ class MainWindow(tk.Tk):
         model_path = self.label_to_path[self.model_var.get()]
         try:
             sr = self.srValue_var.get()
+            n_fft = self.nfftValue_var.get()
             hop_length = self.hopValue_var.get()
             window_size = self.winSize_var.get()
             loops_num = self.stackLoopsNum_var.get()
@@ -454,11 +450,10 @@ class MainWindow(tk.Tk):
         save_data(data={
             'exportPath': export_path,
             'gpuConversion': self.gpuConversion_var.get(),
-            'postprocessing': self.postprocessing_var.get(),
-            'mask': self.mask_var.get(),
             'stackLoops': self.stackLoops_var.get(),
             'gpuConversion': self.gpuConversion_var.get(),
             'srValue': sr,
+            'nfftValue': n_fft,
             'hopValue': hop_length,
             'winSize': window_size,
             'stackLoopsNum': loops_num,
@@ -469,10 +464,9 @@ class MainWindow(tk.Tk):
                          kwargs={
                              'input_paths': input_paths,
                              'gpu': 0 if self.gpuConversion_var.get() else -1,
-                             'postprocess': self.postprocessing_var.get(),
-                             'out_mask': self.mask_var.get(),
                              'model': model_path,
                              'sr': sr,
+                             'n_fft': n_fft,
                              'hop_length': hop_length,
                              'window_size': window_size,
                              'export_path': export_path,

@@ -28,15 +28,43 @@ class Namespace:
 
 def main(window: tk.Wm, input_paths: list, gpu: bool = -1,
          model: str = 'models/baseline.pth', sr: int = 44100, hop_length: int = 1024,
-         window_size: int = 512, out_mask: bool = False, postprocess: bool = False,
+         window_size: int = 512, n_fft: int = 2048,
          export_path: str = '', loops: int = 1,
          # Other Variables (Tkinter)
          progress_var: tk.Variable = None, button_widget: tk.Button = None, command_widget: tk.Text = None,
          ):
+    def reconstruct(X, window_size, model, device, roll=False):
+        l, r, roi_size = dataset.make_padding(X.shape[2], window_size, model.offset)
+        X_pad = np.pad(X, ((0, 0), (0, 0), (l, r)), mode='constant')
+
+        if roll:
+            X_pad = np.roll(X_pad, roi_size // 2, axis=2)
+
+        model.eval()
+        with torch.no_grad():
+            preds = []
+            for i in tqdm(range(int(np.ceil(X.shape[2] / roi_size)))):
+                start = i * roi_size
+                X_window = torch.from_numpy(np.asarray([
+                    X_pad[:, :, start:start + window_size],
+                ])).to(device)
+
+                pred = model.predict(X_window)
+
+                pred = pred.detach().cpu().numpy()
+                preds.append(pred[0])
+
+            pred = np.concatenate(preds, axis=2)[:, :, :X.shape[2]]
+
+        if roll:
+            pred = np.roll(pred, -roi_size // 2, axis=2)
+
+        return pred  
+
     def load_model():
         args.command_widget.write('Loading model...\n')  # nopep8 Write Command Text
         device = torch.device('cpu')
-        model = nets.CascadedASPPNet()
+        model = nets.CascadedASPPNet(args.n_fft)
         model.load_state_dict(torch.load(args.model, map_location=device))
         if torch.cuda.is_available() and args.gpu >= 0:
             device = torch.device('cuda:{}'.format(args.gpu))
@@ -58,60 +86,19 @@ def main(window: tk.Wm, input_paths: list, gpu: bool = -1,
 
     def stft_wave_source(X):
         args.command_widget.write(base_text + 'Stft of wave source...\n')  # nopep8 Write Command Text
-        X = spec_utils.calc_spec(X, args.hop_length)
-        X, phase = np.abs(X), np.exp(1.j * np.angle(X))
-        coeff = X.max()
-        X /= coeff
+        X = spec_utils.get_spectrogram(X, args.hop_length, args.n_fft)
+        X_mag, X_phase = np.abs(X), np.angle(X)
 
-        offset = model.offset
-        l, r, roi_size = dataset.make_padding(
-            X.shape[2], args.window_size, offset)
-        X_pad = np.pad(X, ((0, 0), (0, 0), (l, r)), mode='constant')
-        X_roll = np.roll(X_pad, roi_size // 2, axis=2)
+        pred = reconstruct(X_mag, args.window_size, model, device)
+        pred_roll = reconstruct(X_mag, args.window_size, model, device, roll=True)
+        pred = (pred + pred_roll) / 2
+        args.command_widget.write(base_text + 'Inverse stft of instruments and vocals...\n')
+        y_spec = pred * np.exp(1.j * X_phase)
+        v_spec = np.clip(X_mag - pred, 0, np.inf) * np.exp(1.j * X_phase)
 
-        model.eval()
-        with torch.no_grad():
-            masks = []
-            masks_roll = []
-            length = int(np.ceil(X.shape[2] / roi_size))
-            for i in tqdm(range(length)):
-                progress_var.set(base_progress + max_progress * (0.1 + (0.6/length * i)))  # nopep8 Update Progress
-                start = i * roi_size
-                X_window = torch.from_numpy(np.asarray([
-                    X_pad[:, :, start:start + args.window_size],
-                    X_roll[:, :, start:start + args.window_size]
-                ])).to(device)
-                pred = model.predict(X_window)
-                pred = pred.detach().cpu().numpy()
-                masks.append(pred[0])
-                masks_roll.append(pred[1])
+        wav_instrument = spec_utils.spectrogram_to_wave(y_spec, hop_length=args.hop_length) # nopep8
+        wav_vocals = spec_utils.spectrogram_to_wave(v_spec, hop_length=args.hop_length) # nopep8
 
-            mask = np.concatenate(masks, axis=2)[:, :, :X.shape[2]]
-            mask_roll = np.concatenate(masks_roll, axis=2)[
-                :, :, :X.shape[2]]
-            mask = (mask + np.roll(mask_roll, -roi_size // 2, axis=2)) / 2
-
-        if args.postprocess:
-            vocal = X * (1 - mask) * coeff
-            mask = spec_utils.mask_uninformative(mask, vocal)
-        args.command_widget.write(base_text + 'Done!\n')  # nopep8 Write Command Text
-
-        inst = X * mask * coeff
-        vocal = X * (1 - mask) * coeff
-
-        return inst, vocal, phase, mask
-
-    def invert_instrum_vocal(inst, vocal, phase):
-        args.command_widget.write(base_text + 'Inverse stft of instruments and vocals...\n')  # nopep8 Write Command Text
-
-        wav_instrument = spec_utils.spec_to_wav(inst, phase, args.hop_length)  # nopep8
-        wav_vocals = spec_utils.spec_to_wav(vocal, phase, args.hop_length)  # nopep8
-
-        args.command_widget.write(base_text + 'Done!\n')  # nopep8 Write Command Text
-
-        return wav_instrument, wav_vocals
-
-    def save_files(wav_instrument, wav_vocals):
         args.command_widget.write(base_text + 'Saving Files...\n')  # nopep8 Write Command Text
         sf.write(f'{export_path}/{base_name}_(Instrumental).wav',
                  wav_instrument.T, sr)
@@ -125,21 +112,9 @@ def main(window: tk.Wm, input_paths: list, gpu: bool = -1,
 
         args.command_widget.write(base_text + 'Done!\n')  # nopep8 Write Command Text
 
-    def create_mask():
-        args.command_widget.write(base_text + 'Creating Mask...\n')  # nopep8 Write Command Text
-        norm_mask = np.uint8((1 - mask) * 255).transpose(1, 2, 0)
-        norm_mask = np.concatenate([
-            np.max(norm_mask, axis=2, keepdims=True),
-            norm_mask], axis=2)[::-1]
-        _, bin_mask = cv2.imencode('.png', norm_mask)
-        args.command_widget.write(base_text + 'Saving Mask...\n')  # nopep8 Write Command Text
-        with open(f'{export_path}/{base_name}_(Mask).png', mode='wb') as f:
-            bin_mask.tofile(f)
-        args.command_widget.write(base_text + 'Done!\n')  # nopep8 Write Command Text
-
     args = Namespace(input=input_paths, gpu=gpu, model=model,
                      sr=sr, hop_length=hop_length, window_size=window_size,
-                     out_mask=out_mask, postprocess=postprocess, export=export_path,
+                     n_fft=n_fft, export=export_path,
                      loops=loops,
                      # Other Variables (Tkinter)
                      window=window, progress_var=progress_var,
@@ -171,18 +146,8 @@ def main(window: tk.Wm, input_paths: list, gpu: bool = -1,
                 X, sr = load_wave_source()
                 progress_var.set(base_progress + max_progress * 0.1)  # nopep8 Update Progress
 
-                inst, vocal, phase, mask = stft_wave_source(X)
+                X_phase = stft_wave_source(X)
                 progress_var.set(base_progress + max_progress * 0.7)  # nopep8 Update Progress
-
-                wav_instrument, wav_vocals = invert_instrum_vocal(inst, vocal, phase)  # nopep8
-                progress_var.set(base_progress + max_progress * 0.8)  # nopep8 Update Progress
-
-                save_files(wav_instrument, wav_vocals)
-                progress_var.set(base_progress + max_progress * 0.9)  # nopep8 Update Progress
-
-                if args.out_mask:
-                    create_mask()
-                progress_var.set(base_progress + max_progress * 1)  # nopep8 Update Progress
 
             args.command_widget.write(base_text + 'Completed Seperation!\n\n')  # nopep8 Write Command Text
         except Exception as e:
